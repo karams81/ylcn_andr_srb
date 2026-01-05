@@ -1,37 +1,47 @@
 import os
-import requests
 import re
+from playwright.sync_api import sync_playwright
 
-# Domain aralığı (25–99)
+# 1️⃣ Aktif domain bulma (Playwright ile)
 active_domain = None
-for i in range(25, 100):
-    url = f"https://birazcikspor{i}.xyz/"
-    try:
-        r = requests.head(url, timeout=5)
-        if r.status_code == 200:
-            active_domain = url
-            break
-    except:
-        continue
+with sync_playwright() as p:
+    browser = p.chromium.launch(headless=True)
+    page = browser.new_page()
+
+    for i in range(25, 100):
+        url = f"https://birazcikspor{i}.xyz/"
+        try:
+            response = page.goto(url, timeout=5000)
+            if response and response.status == 200:
+                print(f"✅ Aktif domain bulundu: {url}")
+                active_domain = url
+                break
+        except Exception as e:
+            print(f"{url} → Hata: {e}")
+            continue
+
+    browser.close()
 
 if not active_domain:
-    raise SystemExit("Aktif domain bulunamadı.")
+    raise SystemExit("❌ Aktif domain bulunamadı.")
 
-# İlk kanal ID'si al
+# 2️⃣ İlk kanal ID'sini al
+import requests
+
 html = requests.get(active_domain, timeout=10).text
 m = re.search(r'<iframe[^>]+id="matchPlayer"[^>]+src="event\.html\?id=([^"]+)"', html)
 if not m:
-    raise SystemExit("Kanal ID bulunamadı.")
+    raise SystemExit("❌ Kanal ID bulunamadı.")
 first_id = m.group(1)
 
-# Base URL çek
+# 3️⃣ Base URL çek
 event_source = requests.get(active_domain + "event.html?id=" + first_id, timeout=10).text
 b = re.search(r'var\s+baseurls\s*=\s*\[\s*"([^"]+)"', event_source)
 if not b:
-    raise SystemExit("Base URL bulunamadı.")
+    raise SystemExit("❌ Base URL bulunamadı.")
 base_url = b.group(1)
 
-# Kanal listesi (tam siyahın saxlanıldı)
+# 4️⃣ Kanal listesi
 channels = [
     ("beIN Sport 1 HD","androstreamlivebs1","https://i.hizliresim.com/8xzjgqv.jpg"),
     ("beIN Sport 2 HD","androstreamlivebs2","https://i.hizliresim.com/8xzjgqv.jpg"),
@@ -71,7 +81,7 @@ channels = [
     ("Exxen 8 HD","androstreamliveexn8","https://i.hizliresim.com/8xzjgqv.jpg"),
 ]
 
-# ✅ Toplu M3U faylı (androiptv.m3u8)
+# 5️⃣ Toplu M3U8 dosyası
 lines = ["#EXTM3U"]
 for name, cid, logo in channels:
     lines.append(f'#EXTINF:-1 tvg-id="sport.tr" tvg-name="TR:{name}" tvg-logo="{logo}" group-title="DeaTHLesS",TR:{name}')
@@ -83,7 +93,7 @@ with open("androiptv.m3u8", "w", encoding="utf-8") as f:
 
 print("✅ androiptv.m3u8 faylı yaradıldı.")
 
-# ✅ Ayrı-ayrı .m3u8 faylları
+# 6️⃣ Ayrı ayrı .m3u8 dosyaları
 out_dir = "channels"
 os.makedirs(out_dir, exist_ok=True)
 
@@ -101,4 +111,4 @@ for name, cid, logo in channels:
     with open(os.path.join(out_dir, file_name), "w", encoding="utf-8") as f:
         f.write("\n".join(content))
 
-print(f"✅ {len(channels)} kanal ayrıca '{out_dir}' qovluğuna .m3u8 faylı olaraq yazıldı.")
+print(f"✅ {len(channels)} kanal '{out_dir}' qovluğuna yazıldı.")
