@@ -1,9 +1,11 @@
 import os
 import re
+import requests
 from playwright.sync_api import sync_playwright
 
 # 1️⃣ Aktif domain bulma
 active_domain = None
+proxy_prefix = "https://proxy.freecdn.workers.dev/?url="
 
 with sync_playwright() as p:
     browser = p.chromium.launch(headless=True)
@@ -11,8 +13,9 @@ with sync_playwright() as p:
 
     for i in range(25, 100):
         url = f"https://birazcikspor{i}.xyz/"
+        proxied_url = f"{proxy_prefix}{url}"
         try:
-            response = page.goto(url, timeout=10000)
+            response = page.goto(proxied_url, timeout=15000)
             if response and response.status == 200:
                 print(f"✅ Aktif domain bulundu: {url}")
                 active_domain = url
@@ -24,21 +27,29 @@ with sync_playwright() as p:
     if not active_domain:
         raise SystemExit("❌ Aktif domain bulunamadı.")
 
-    # 2️⃣ Kanal ID bulma (JS render edilmiş HTML üzerinden)
-    content = page.content()
-    m = re.search(r'<iframe[^>]+src="event\.html\?id=([^"]+)"', content)
-    if not m:
-        raise SystemExit("❌ Kanal ID bulunamadı (Playwright ile).")
-    
-    first_id = m.group(1)
-    print("✅ Kanal ID bulundu:", first_id)
-    
+    # 2️⃣ Kanal ID bulma (iframe üzerinden)
+    proxied_url = f"{proxy_prefix}{active_domain}"
+    page.goto(proxied_url, timeout=15000)
+
+    try:
+        iframe_element = page.wait_for_selector('iframe', timeout=5000)
+        iframe_src = iframe_element.get_attribute('src')
+        print("iframe src bulundu:", iframe_src)
+
+        m = re.search(r'id=([^&]+)', iframe_src)
+        if not m:
+            raise SystemExit("❌ Kanal ID bulunamadı (iframe src'den).")
+        first_id = m.group(1)
+        print("✅ Kanal ID bulundu:", first_id)
+    except:
+        raise SystemExit("❌ Kanal ID bulunamadı (iframe DOM beklerken).")
+
     browser.close()
 
-# 3️⃣ Base URL çek (requests ile yeterli)
-import requests
-
-event_source = requests.get(active_domain + "event.html?id=" + first_id, timeout=10).text
+# 3️⃣ Base URL çek (requests + proxy)
+event_url = f"{active_domain}event.html?id={first_id}"
+proxied_event_url = f"{proxy_prefix}{event_url}"
+event_source = requests.get(proxied_event_url, timeout=10).text
 b = re.search(r'var\s+baseurls\s*=\s*\[\s*"([^"]+)"', event_source)
 if not b:
     raise SystemExit("❌ Base URL bulunamadı.")
