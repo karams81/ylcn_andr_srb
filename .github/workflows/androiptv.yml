@@ -2,33 +2,46 @@ name: AndroIPTV
 
 on:
   schedule:
-    - cron: "*/10 * * * *"   # her 10 dakikada bir
+    - cron: "0 */3 * * *"   # 3 saatte bir
   workflow_dispatch:          # manuel çalıştırma için
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
     steps:
       - name: Repo indir
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # rebase ve pull için
 
       - name: Python kur
         uses: actions/setup-python@v4
         with:
-          python-version: '3.x'
+          python-version: '3.10'
 
       - name: Gerekli paketler
-        run: pip install requests
+        run: |
+          pip install --upgrade pip
+          pip install requests playwright
+
+      - name: Playwright browser kur
+        run: playwright install chromium
 
       - name: IPTV M3U oluştur
         run: python androiptv.py
 
       - name: Değişiklikleri commit et
         run: |
-          git config --global user.name "github-actions"
-          git config --global user.email "github-actions@github.com"
-          # Hem toplu dosya, hem de channels klasörü commit edilir
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
           git add androiptv.m3u8
           git add channels/*.m3u8
-          git commit -m "Update IPTV listeleri" || echo "No changes"
-          git push
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Update IPTV listeleri"
+            git pull --rebase
+            git push
