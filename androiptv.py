@@ -2,8 +2,9 @@ import os
 import re
 from playwright.sync_api import sync_playwright
 
-# 1️⃣ Aktif domain bulma (Playwright ile)
+# 1️⃣ Aktif domain bulma
 active_domain = None
+
 with sync_playwright() as p:
     browser = p.chromium.launch(headless=True)
     page = browser.new_page()
@@ -11,7 +12,7 @@ with sync_playwright() as p:
     for i in range(25, 100):
         url = f"https://birazcikspor{i}.xyz/"
         try:
-            response = page.goto(url, timeout=5000)
+            response = page.goto(url, timeout=10000)
             if response and response.status == 200:
                 print(f"✅ Aktif domain bulundu: {url}")
                 active_domain = url
@@ -20,21 +21,23 @@ with sync_playwright() as p:
             print(f"{url} → Hata: {e}")
             continue
 
+    if not active_domain:
+        raise SystemExit("❌ Aktif domain bulunamadı.")
+
+    # 2️⃣ Kanal ID bulma (JS render edilmiş HTML üzerinden)
+    content = page.content()
+    m = re.search(r'<iframe[^>]+src="event\.html\?id=([^"]+)"', content)
+    if not m:
+        raise SystemExit("❌ Kanal ID bulunamadı (Playwright ile).")
+    
+    first_id = m.group(1)
+    print("✅ Kanal ID bulundu:", first_id)
+    
     browser.close()
 
-if not active_domain:
-    raise SystemExit("❌ Aktif domain bulunamadı.")
-
-# 2️⃣ İlk kanal ID'sini al
+# 3️⃣ Base URL çek (requests ile yeterli)
 import requests
 
-html = requests.get(active_domain, timeout=10).text
-m = re.search(r'<iframe[^>]+id="matchPlayer"[^>]+src="event\.html\?id=([^"]+)"', html)
-if not m:
-    raise SystemExit("❌ Kanal ID bulunamadı.")
-first_id = m.group(1)
-
-# 3️⃣ Base URL çek
 event_source = requests.get(active_domain + "event.html?id=" + first_id, timeout=10).text
 b = re.search(r'var\s+baseurls\s*=\s*\[\s*"([^"]+)"', event_source)
 if not b:
@@ -43,7 +46,7 @@ base_url = b.group(1)
 
 # 4️⃣ Kanal listesi
 channels = [
-    ("beIN Sport 1 HD","androstreamlivebs1","https://i.hizliresim.com/8xzjgqv.jpg"),
+     ("beIN Sport 1 HD","androstreamlivebs1","https://i.hizliresim.com/8xzjgqv.jpg"),
     ("beIN Sport 2 HD","androstreamlivebs2","https://i.hizliresim.com/8xzjgqv.jpg"),
     ("beIN Sport 3 HD","androstreamlivebs3","https://i.hizliresim.com/8xzjgqv.jpg"),
     ("beIN Sport 4 HD","androstreamlivebs4","https://i.hizliresim.com/8xzjgqv.jpg"),
