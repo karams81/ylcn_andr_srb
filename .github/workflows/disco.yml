@@ -1,0 +1,42 @@
+name: Disco M3U Generator
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # 🔴 ÇOK ÖNEMLİ: full history alır
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests
+
+      - name: Run Disco Script
+        run: python disco.py
+
+      - name: Commit and Push M3U File
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+          git pull origin main --rebase
+
+          git add disco.m3u
+          git commit -m "Update disco.m3u [$(date -u)]" || echo "No changes to commit"
+
+          git push origin main
